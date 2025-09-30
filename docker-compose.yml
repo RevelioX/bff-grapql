@@ -1,0 +1,40 @@
+version: "3.9"
+services:
+  mongo:
+    image: mongo:6
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  rest-productos:
+    build: ./rest-productos
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/shopnest_productos
+      - PORT=3001
+    depends_on:
+      - mongo
+    ports:
+      - "3001:3001"
+  rest-ordenes:
+    build: ./rest-ordenes
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/shopnest_ordenes
+      - PORT=3002
+    depends_on:
+      - mongo
+    ports:
+      - "3002:3002"
+  bff-web:
+    build: ./bff-web
+    environment:
+      - PORT=4000
+      - REST_PRODUCTOS_URL=http://rest-productos:3001
+      - REST_ORDENES_URL=http://rest-ordenes:3002
+    depends_on:
+      - rest-productos
+      - rest-ordenes
+    ports:
+      - "4000:4000"
+volumes:
+  mongo_data:

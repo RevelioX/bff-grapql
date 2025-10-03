@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Auth0</title>
+  <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+</head>
+<body>
+  <h1>Test Auth0 Login</h1>
+  <button id="login">Login</button>
+  <button id="getToken">Obtener Token</button>
+  <button id="callAPI">Llamar GraphQL</button>
+  <pre id="output"></pre>
+
+  <script>
+    let auth0Client;
+    const output = document.getElementById('output');
+
+    async function init() {
+      try {
+        auth0Client = await auth0.createAuth0Client({
+          domain: 'dev-3spodgims268xc6l.us.auth0.com',
+          clientId: 'hd3bNPytwrfZ65tjgmZn5PHRF1chvnz5',
+          authorizationParams: {
+            audience: 'bff-web-audience',
+            scope: 'openid profile email',
+            redirect_uri: window.location.origin // <- Esto toma automáticamente http://127.0.0.1:5500
+          }
+        });
+
+        // Manejar callback después del login
+        if (window.location.search.includes('code=')) {
+          output.textContent = 'Procesando login...';
+          await auth0Client.handleRedirectCallback();
+          window.history.replaceState({}, document.title, '/');
+          output.textContent = '✅ Login exitoso! Ahora puedes obtener el token.';
+        }
+
+        // Verificar si ya está autenticado
+        const isAuthenticated = await auth0Client.isAuthenticated();
+        if (isAuthenticated) {
+          const user = await auth0Client.getUser();
+          output.textContent = `✅ Ya estás logueado como: ${user.email || user.name}`;
+        } else {
+          output.textContent = 'No estás logueado. Haz click en "Login" para autenticarte.';
+        }
+      } catch (err) {
+        output.textContent = `Error inicializando: ${err.message}`;
+        console.error(err);
+      }
+    }
+
+    document.getElementById('login').onclick = async () => {
+      try {
+        output.textContent = 'Redirigiendo a Auth0...';
+        await auth0Client.loginWithRedirect();
+      } catch (err) {
+        output.textContent = `Error en login: ${err.message}`;
+        console.error(err);
+      }
+    };
+
+    document.getElementById('getToken').onclick = async () => {
+      try {
+        const token = await auth0Client.getTokenSilently();
+        output.textContent = `TOKEN JWT:\n\n${token}\n\n✅ Copia este token para usarlo en Postman con:\nAuthorization: Bearer <token>`;
+        console.log('Token completo:', token);
+        
+        // Intentar decodificar el payload para mostrar info
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('Payload del token:', payload);
+      } catch (err) {
+        output.textContent = `Error obteniendo token: ${err.message}\n\n¿Hiciste login primero?`;
+        console.error(err);
+      }
+    };
+
+    document.getElementById('callAPI').onclick = async () => {
+      try {
+        const token = await auth0Client.getTokenSilently();
+        output.textContent = 'Llamando a GraphQL...';
+        
+        const response = await fetch('http://localhost:4000/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            query: '{ __typename }'
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(`HTTP ${response.status}: ${error}`);
+        }
+
+        const data = await response.json();
+        output.textContent = `✅ Respuesta del BFF:\n\n${JSON.stringify(data, null, 2)}`;
+      } catch (err) {
+        output.textContent = `Error llamando API: ${err.message}`;
+        console.error(err);
+      }
+    };
+
+    // Inicializar cuando carga la página
+    window.onload = init;
+  </script>
+</body>
+</html>
